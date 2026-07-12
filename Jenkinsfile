@@ -17,6 +17,33 @@ pipeline {
             }
         }
 
+        stage('Environment Check') {
+            steps {
+                sh '''
+                echo "=============================="
+                echo "Jenkins Environment Check"
+                echo "=============================="
+
+                echo ""
+                echo "===== JAVA ====="
+                java -version
+                javac -version
+
+                echo ""
+                echo "===== MAVEN ====="
+                mvn -version
+
+                echo ""
+                echo "===== JAVA_HOME ====="
+                echo $JAVA_HOME
+
+                echo ""
+                echo "===== PATH ====="
+                echo $PATH
+                '''
+            }
+        }
+
         stage('Build') {
             steps {
                 sh 'mvn clean package'
@@ -52,7 +79,7 @@ pipeline {
             steps {
                 sh '''
                 sleep 10
-                curl http://localhost:${HOST_PORT}
+                curl -f http://localhost:${HOST_PORT}
                 '''
             }
         }
@@ -65,6 +92,10 @@ pipeline {
 
         failure {
             echo 'Pipeline failed.'
+        }
+
+        always {
+            echo 'Pipeline execution completed.'
         }
     }
 }
