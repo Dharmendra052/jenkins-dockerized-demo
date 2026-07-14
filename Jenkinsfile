@@ -189,10 +189,37 @@ pipeline {
             docker logs ${CONTAINER_NAME} || true
             '''
         }
+        stage('Deploy Application') {
+            steps {
+                sh '''
+                echo "Stopping existing application..."
+                pkill -f "jenkins-dockerized-demo" || true
 
-        always {
-            cleanWs()
-            echo "Pipeline execution completed."
+                echo "Starting new application..."
+                nohup java -jar \
+                /var/lib/jenkins/jobs/${JOB_NAME}/builds/${BUILD_NUMBER}/archive/target/jenkins-dockerized-demo-1.0.0.jar \
+                --server.port=8082 \
+                > /var/lib/jenkins/jobs/${JOB_NAME}/builds/${BUILD_NUMBER}/archive/target/app.log 2>&1 &
+                '''
+            }
         }
-    }
-}
+        
+                always {
+                    cleanWs()
+                    echo "Pipeline execution completed."
+                }
+            }
+        }
+
+        stage('Health Check') {
+            steps {
+                sh '''
+                echo "Waiting for application to start..."
+                sleep 15
+
+                curl -f http://localhost:8082
+
+                echo "Application is healthy."
+                '''
+            }
+        }
