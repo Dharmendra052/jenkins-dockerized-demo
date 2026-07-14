@@ -190,37 +190,41 @@ pipeline {
             '''
         }
         
-        stage('Deploy Application') {
-            steps {
-                sh '''
-                echo "Stopping existing application..."
-                pkill -f "jenkins-dockerized-demo" || true
+         stage('Deploy Application') {
+    steps {
+        sh '''
+        echo "Stopping existing application..."
+        pkill -f "jenkins-dockerized-demo" || true
 
-                echo "Starting new application..."
-                nohup java -jar \
-                /var/lib/jenkins/jobs/${JOB_NAME}/builds/${BUILD_NUMBER}/archive/target/jenkins-dockerized-demo-1.0.0.jar \
-                --server.port=8082 \
-                > /var/lib/jenkins/jobs/${JOB_NAME}/builds/${BUILD_NUMBER}/archive/target/app.log 2>&1 &
-                '''
-                }
-            }
-        }
-                always {
-                    cleanWs()
-                    echo "Pipeline execution completed."
-                }
-            }
-        }
+        echo "Starting new application..."
+        nohup java -jar \
+        /var/lib/jenkins/jobs/${JOB_NAME}/builds/${BUILD_NUMBER}/archive/target/jenkins-dockerized-demo-1.0.0.jar \
+        --server.port=8082 \
+        > /var/lib/jenkins/jobs/${JOB_NAME}/builds/${BUILD_NUMBER}/archive/target/app.log 2>&1 &
+        '''
+    }
+}
 
-        stage('Health Check') {
-            steps {
-                sh '''
-                echo "Waiting for application to start..."
-                sleep 15
+stage('Health Check') {
+    steps {
+        sh '''
+        echo "Waiting for application to start..."
 
-                curl -f http://localhost:8082
+        for i in $(seq 1 12)
+        do
+            STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://localhost:8082 || true)
 
-                echo "Application is healthy."
-                '''
-            }
-        }
+            if [ "$STATUS" = "200" ]; then
+                echo "Application is UP"
+                exit 0
+            fi
+
+            echo "Attempt $i: Waiting..."
+            sleep 5
+        done
+
+        echo "Application failed Health Check"
+        exit 1
+        '''
+    }
+}
