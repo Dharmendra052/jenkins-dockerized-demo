@@ -12,11 +12,9 @@ pipeline {
     }
 
     environment {
-        IMAGE_NAME     = "jenkins-dockerized-demo"
-        IMAGE_TAG      = "1.0.0"
-        CONTAINER_NAME = "jenkins-demo"
-        HOST_PORT      = "8081"
-        CONTAINER_PORT = "8080"
+        APP_NAME = "jenkins-dockerized-demo"
+        APP_PORT = "8082"
+        S3_BUCKET = "jenkins-artifacts-2026-923093694371-ap-south-1-an"
     }
 
     stages {
@@ -31,7 +29,7 @@ pipeline {
             steps {
                 sh '''
                 echo "========================================"
-                echo " Jenkins Environment Check"
+                echo "Jenkins Environment Check"
                 echo "========================================"
 
                 echo ""
@@ -88,45 +86,39 @@ pipeline {
         stage('Verify Build Artifact') {
             steps {
                 sh '''
-                echo "Generated files"
+                echo "Generated Files"
                 ls -lh target/
 
                 echo ""
                 echo "Dockerfile"
-                cat Dockerfile
+                cat Dockerfile || true
                 '''
             }
         }
-        
+
         stage('Upload Artifact to S3') {
             steps {
                 sh '''
                 aws s3 cp target/jenkins-dockerized-demo-1.0.0.jar \
-                s3://jenkins-artifacts-2026-923093694371-ap-south-1-an/
-                '''
-            }
-        }
-        
-        stage('Build Docker Image') {
-            steps {
-                sh '''
-                docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
-                docker images | grep ${IMAGE_NAME}
+                s3://${S3_BUCKET}/
                 '''
             }
         }
 
-        stage('Deploy Container') {
+        stage('Deploy Application') {
             steps {
                 sh '''
-                docker rm -f ${CONTAINER_NAME} || true
+                echo "Stopping existing application..."
+                pkill -f "${APP_NAME}" || true
 
-                docker run -d \
-                  --name ${CONTAINER_NAME} \
-                  -p ${HOST_PORT}:${CONTAINER_PORT} \
-                  ${IMAGE_NAME}:${IMAGE_TAG}
+                echo "Starting new application..."
 
-                docker ps
+                nohup java -jar \
+                /var/lib/jenkins/jobs/${JOB_NAME}/builds/${BUILD_NUMBER}/archive/target/jenkins-dockerized-demo-1.0.0.jar \
+                --server.port=${APP_PORT} \
+                > /var/lib/jenkins/jobs/${JOB_NAME}/builds/${BUILD_NUMBER}/archive/target/app.log 2>&1 &
+
+                sleep 10
                 '''
             }
         }
@@ -134,11 +126,11 @@ pipeline {
         stage('Health Check') {
             steps {
                 sh '''
-                echo "Waiting for application..."
+                echo "Waiting for application to start..."
 
                 for i in $(seq 1 12)
                 do
-                    STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://localhost:${HOST_PORT} || true)
+                    STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://localhost:${APP_PORT} || true)
 
                     if [ "$STATUS" = "200" ]; then
                         echo "Application is UP"
@@ -149,9 +141,12 @@ pipeline {
                     sleep 5
                 done
 
+                echo ""
                 echo "Application failed Health Check"
 
-                docker logs ${CONTAINER_NAME} || true
+                echo ""
+                echo "Application Log"
+                cat /var/lib/jenkins/jobs/${JOB_NAME}/builds/${BUILD_NUMBER}/archive/target/app.log || true
 
                 exit 1
                 '''
@@ -177,55 +172,17 @@ pipeline {
             mvn -version || true
 
             echo ""
-            echo "========== DOCKER CONTAINERS =========="
-            docker ps -a || true
+            echo "========== RUNNING JAVA PROCESS =========="
+            ps -ef | grep java || true
 
             echo ""
-            echo "========== DOCKER IMAGES =========="
-            docker images || true
-
-            echo ""
-            echo "========== CONTAINER LOGS =========="
-            docker logs ${CONTAINER_NAME} || true
+            echo "========== APPLICATION LOG =========="
+            cat /var/lib/jenkins/jobs/${JOB_NAME}/builds/${BUILD_NUMBER}/archive/target/app.log || true
             '''
         }
-        
-         stage('Deploy Application') {
-    steps {
-        sh '''
-        echo "Stopping existing application..."
-        pkill -f "jenkins-dockerized-demo" || true
 
-        echo "Starting new application..."
-        nohup java -jar \
-        /var/lib/jenkins/jobs/${JOB_NAME}/builds/${BUILD_NUMBER}/archive/target/jenkins-dockerized-demo-1.0.0.jar \
-        --server.port=8082 \
-        > /var/lib/jenkins/jobs/${JOB_NAME}/builds/${BUILD_NUMBER}/archive/target/app.log 2>&1 &
-        '''
+        always {
+            echo "Pipeline Execution Completed"
+        }
     }
-}
-
-stage('Health Check') {
-    steps {
-        sh '''
-        echo "Waiting for application to start..."
-
-        for i in $(seq 1 12)
-        do
-            STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://localhost:8082 || true)
-
-            if [ "$STATUS" = "200" ]; then
-                echo "Application is UP"
-                exit 0
-            fi
-
-            echo "Attempt $i: Waiting..."
-            sleep 5
-        done
-
-        echo "Application failed Health Check"
-        exit 1
-        '''
-    }
-}
 }
