@@ -189,6 +189,7 @@ pipeline {
             docker logs ${CONTAINER_NAME} || true
             '''
         }
+        
         stage('Deploy Application') {
             steps {
                 sh '''
@@ -201,9 +202,9 @@ pipeline {
                 --server.port=8082 \
                 > /var/lib/jenkins/jobs/${JOB_NAME}/builds/${BUILD_NUMBER}/archive/target/app.log 2>&1 &
                 '''
+                }
             }
         }
-        
                 always {
                     cleanWs()
                     echo "Pipeline execution completed."
