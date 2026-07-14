@@ -97,7 +97,16 @@ pipeline {
                 '''
             }
         }
-
+        
+        stage('Upload Artifact to S3') {
+            steps {
+                sh '''
+                aws s3 cp target/jenkins-dockerized-demo-1.0.0.jar \
+                s3://dharmendra-jenkins-artifacts/
+                '''
+            }
+        }
+        
         stage('Build Docker Image') {
             steps {
                 sh '''
