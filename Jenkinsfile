@@ -102,7 +102,7 @@ pipeline {
             steps {
                 sh '''
                 aws s3 cp target/jenkins-dockerized-demo-1.0.0.jar \
-                s3://dharmendra-jenkins-artifacts/
+                s3://jenkins-artifacts-2026-923093694371-ap-south-1-an/
                 '''
             }
         }
