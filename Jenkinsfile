@@ -1,6 +1,11 @@
 pipeline {
     agent any
 
+    tools {
+        jdk 'JDK21'
+        maven 'Maven3'
+    }
+
     options {
         timestamps()
         disableConcurrentBuilds()
@@ -25,12 +30,27 @@ pipeline {
         stage('Environment Check') {
             steps {
                 sh '''
-                echo "======================================"
-                echo " Jenkins Build Environment"
-                echo "======================================"
+                echo "========================================"
+                echo " Jenkins Environment Check"
+                echo "========================================"
 
                 echo ""
-                echo "JAVA_HOME = $JAVA_HOME"
+                echo "JAVA_HOME=$JAVA_HOME"
+
+                echo ""
+                echo "PATH=$PATH"
+
+                echo ""
+                echo "which java"
+                which java
+
+                echo ""
+                echo "which javac"
+                which javac
+
+                echo ""
+                echo "which mvn"
+                which mvn
 
                 echo ""
                 echo "Java Version"
@@ -43,10 +63,6 @@ pipeline {
                 echo ""
                 echo "Maven Version"
                 mvn -version
-
-                echo ""
-                echo "PATH"
-                echo $PATH
                 '''
             }
         }
@@ -72,7 +88,7 @@ pipeline {
         stage('Verify Build Artifact') {
             steps {
                 sh '''
-                echo "Generated JAR Files"
+                echo "Generated files"
                 ls -lh target/
 
                 echo ""
@@ -97,9 +113,9 @@ pipeline {
                 docker rm -f ${CONTAINER_NAME} || true
 
                 docker run -d \
-                    --name ${CONTAINER_NAME} \
-                    -p ${HOST_PORT}:${CONTAINER_PORT} \
-                    ${IMAGE_NAME}:${IMAGE_TAG}
+                  --name ${CONTAINER_NAME} \
+                  -p ${HOST_PORT}:${CONTAINER_PORT} \
+                  ${IMAGE_NAME}:${IMAGE_TAG}
 
                 docker ps
                 '''
@@ -111,7 +127,7 @@ pipeline {
                 sh '''
                 echo "Waiting for application..."
 
-                for i in {1..12}
+                for i in $(seq 1 12)
                 do
                     STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://localhost:${HOST_PORT} || true)
 
@@ -120,12 +136,14 @@ pipeline {
                         exit 0
                     fi
 
-                    echo "Attempt $i : Application not ready yet..."
+                    echo "Attempt $i : Waiting..."
                     sleep 5
                 done
 
-                echo "Health Check Failed"
-                docker logs ${CONTAINER_NAME}
+                echo "Application failed Health Check"
+
+                docker logs ${CONTAINER_NAME} || true
+
                 exit 1
                 '''
             }
@@ -135,22 +153,30 @@ pipeline {
     post {
 
         success {
-            echo "Build and Deployment Successful."
+            echo "Build Successful"
         }
 
         failure {
-            echo "Pipeline Failed."
+            echo "Pipeline Failed"
 
             sh '''
-            echo "========== Docker Containers =========="
+            echo "========== JAVA =========="
+            java -version || true
+
+            echo ""
+            echo "========== MAVEN =========="
+            mvn -version || true
+
+            echo ""
+            echo "========== DOCKER CONTAINERS =========="
             docker ps -a || true
 
             echo ""
-            echo "========== Docker Images =========="
+            echo "========== DOCKER IMAGES =========="
             docker images || true
 
             echo ""
-            echo "========== Container Logs =========="
+            echo "========== CONTAINER LOGS =========="
             docker logs ${CONTAINER_NAME} || true
             '''
         }
